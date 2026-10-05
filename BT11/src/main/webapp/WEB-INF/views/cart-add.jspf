@@ -1,0 +1,10 @@
+<%@ page pageEncoding="UTF-8" %>
+<c:if test="${sessionScope.currentUser != null && sessionScope.currentUser.active && not sessionScope.currentUser.admin}">
+<c:choose><c:when test="${book.quantity > 0}">
+<form action="${pageContext.request.contextPath}/cart" method="post" class="d-flex gap-2 my-3">
+<input type="hidden" name="csrfToken" value="${sessionScope.commerceCsrf}">
+<input type="hidden" name="action" value="add"><input type="hidden" name="bookId" value="${book.bookId}">
+<input type="number" aria-label="Số lượng mua" name="quantity" value="1" min="1" max="${book.quantity}" required class="form-control" style="max-width:100px">
+<button type="submit" class="btn btn-success">Thêm vào giỏ</button></form>
+</c:when><c:otherwise><p class="text-danger">Sách đã hết hàng.</p></c:otherwise></c:choose>
+</c:if>

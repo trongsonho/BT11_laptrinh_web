@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns="https://jakarta.ee/xml/ns/jakartaee"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee
+                             https://jakarta.ee/xml/ns/jakartaee/web-app_6_0.xsd"
+         version="6.0">
+
+    <display-name>GK_laptrinh_web_24133049</display-name>
+
+    <welcome-file-list>
+        <welcome-file>home</welcome-file>
+    </welcome-file-list>
+
+    <!-- Encoding Filter -->
+    <filter>
+        <filter-name>EncodingFilter_24133049</filter-name>
+        <filter-class>vn.edu.hcmute.exam.filter.EncodingFilter_24133049</filter-class>
+    </filter>
+    <filter-mapping>
+        <filter-name>EncodingFilter_24133049</filter-name>
+        <url-pattern>/*</url-pattern>
+    </filter-mapping>
+
+    <filter>
+        <filter-name>CommerceSessionFilter_24133049</filter-name>
+        <filter-class>vn.edu.hcmute.exam.filter.CommerceSessionFilter_24133049</filter-class>
+    </filter>
+    <filter-mapping>
+        <filter-name>CommerceSessionFilter_24133049</filter-name>
+        <url-pattern>/*</url-pattern>
+    </filter-mapping>
+
+    <!-- SiteMesh Filter Configuration -->
+    <filter>
+        <filter-name>SiteMeshFilter_24133049</filter-name>
+        <filter-class>vn.edu.hcmute.exam.config.SiteMeshFilter_24133049</filter-class>
+    </filter>
+    <filter-mapping>
+        <filter-name>SiteMeshFilter_24133049</filter-name>
+        <url-pattern>/*</url-pattern>
+    </filter-mapping>
+
+    <!-- Admin Authentication Filter -->
+    <filter>
+        <filter-name>AdminAuthFilter_24133049</filter-name>
+        <filter-class>vn.edu.hcmute.exam.filter.AdminAuthFilter_24133049</filter-class>
+    </filter>
+    <filter-mapping>
+        <filter-name>AdminAuthFilter_24133049</filter-name>
+        <url-pattern>/admin/*</url-pattern>
+    </filter-mapping>
+
+    <session-config>
+        <session-timeout>30</session-timeout>
+        <tracking-mode>COOKIE</tracking-mode>
+    </session-config>
+
+</web-app>

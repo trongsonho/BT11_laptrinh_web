@@ -1,0 +1,9 @@
+# Cấu hình gửi mail OTP qua Gmail SMTP
+# Lưu ý: Cần tạo Mật khẩu ứng dụng (App Password) trong Google Account để kết nối
+mail.smtp.host=smtp.gmail.com
+mail.smtp.port=587
+mail.smtp.auth=true
+mail.smtp.starttls.enable=true
+mail.username=your-email@example.com
+mail.password=YOUR_APP_PASSWORD_HERE
+mail.from=your-email@example.com
