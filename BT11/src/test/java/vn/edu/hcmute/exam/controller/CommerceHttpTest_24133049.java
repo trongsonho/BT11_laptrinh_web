@@ -3,6 +3,9 @@ package vn.edu.hcmute.exam.controller;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import vn.edu.hcmute.exam.support.CommerceFixture_24133049;
+import vn.edu.hcmute.exam.dao.OrderDao_24133049;
+import vn.edu.hcmute.exam.model.OrderStatus_24133049;
+import vn.edu.hcmute.exam.model.Shipping_24133049;
 import java.net.*;
 import java.net.http.*;
 import java.nio.charset.StandardCharsets;
@@ -42,6 +45,80 @@ public class CommerceHttpTest_24133049 {
     }
     private Map<String,String> delivery(String csrf,String token) {
         return Map.of("csrfToken",csrf,"checkoutToken",token,"recipientName","Người nhận <script>","phone","0901234567","address","123 Đường A & B","note","Gọi trước <b>giờ giao</b>");
+    }
+    private long historyOrder(int user, String status) throws Exception {
+        long id=new OrderDao_24133049().createCodOrder(user,Map.of(book(),1),
+            new Shipping_24133049("Demo lịch sử","0901234567","Địa chỉ demo",""),UUID.randomUUID().toString());
+        fixture.execute("UPDATE dbo.orders SET order_status=?,created_at='2026-10-06T10:00:00' WHERE order_id=?",status,id);
+        return id;
+    }
+    private List<Long> historyIds(String html) {
+        List<Long> ids=new ArrayList<>(); Matcher matcher=Pattern.compile("data-order-id=\"([0-9]+)\"").matcher(html);
+        while(matcher.find()) ids.add(Long.parseLong(matcher.group(1))); return ids;
+    }
+    @Test void historyPaginationOwnershipEmptyStatesAndInvalidParameters() throws Exception {
+        login(client,0);
+        assertTrue(get(client,"/order-history").body().contains("Bạn chưa có đơn hàng nào"));
+        fixture.execute("UPDATE dbo.books SET quantity=100 WHERE bookid=?",book());
+        int user=fixture.userIds.get(0); List<Long> own=new ArrayList<>();
+        for(int i=0;i<21;i++) own.add(historyOrder(user,"DELIVERING"));
+        long shipped=historyOrder(user,"SHIPPED"); long newest=historyOrder(user,"NEW");
+        long foreign=historyOrder(fixture.userIds.get(1),"DELIVERING");
+        var all=get(client,"/order-history?userId="+fixture.userIds.get(1));
+        assertEquals(200,all.statusCode()); assertTrue(all.body().contains("Tổng số đơn: 23"));
+        assertEquals(newest,historyIds(all.body()).get(0)); assertEquals(shipped,historyIds(all.body()).get(1));
+        assertFalse(historyIds(all.body()).contains(foreign)); assertEquals(10,historyIds(all.body()).size());
+        assertTrue(all.body().contains("navbarUserContent")); assertEquals("no-store",all.headers().firstValue("Cache-Control").orElseThrow());
+        String filtered=get(client,"/order-history?status=DELIVERING&page=2").body();
+        assertTrue(filtered.contains("Tổng số đơn: 21")); assertTrue(filtered.contains("Trang 2 / 3"));
+        assertTrue(filtered.contains("status=DELIVERING&amp;page=3")); assertTrue(filtered.contains("name=\"page\" value=\"1\""));
+        assertEquals(10,historyIds(filtered).size());
+        String last=get(client,"/order-history?status=DELIVERING&page=9223372036854775807").body();
+        assertTrue(last.contains("Trang 3 / 3")); assertEquals(1,historyIds(last).size());
+        for(String page:List.of("0","-1","abc","1.5","9223372036854775808","999999999999999999999999")) {
+            String invalid=get(client,"/order-history?status=DELIVERING&page="+page).body();
+            assertTrue(invalid.contains("Số trang không hợp lệ")); assertTrue(invalid.contains("Trang 1 / 3"));
+        }
+        String invalid=get(client,"/order-history?status=UNPAID").body();
+        assertTrue(invalid.contains("Bộ lọc trạng thái không hợp lệ")); assertTrue(invalid.contains("Tổng số đơn: 23"));
+        assertTrue(get(client,"/order-history?status=RETURNED").body().contains("Không có đơn hàng khớp"));
+        HttpClient other=newClient(); login(other,1);
+        assertEquals(1,historyIds(get(other,"/order-history").body()).size());
+        assertEquals(404,get(other,"/order?id="+newest).statusCode());
+    }
+    @Test void oldCodCheckoutAppearsInHistoryAndSqlRefreshMovesAllEightStatesWithoutOtherChanges() throws Exception {
+        login(client,0); String csrf=csrf(client); cartPost(client,csrf,"add",book(),"1");
+        String token=field(get(client,"/checkout").body(),"checkoutToken");
+        var created=post(client,"/checkout",delivery(csrf,token)); assertEquals(302,created.statusCode());
+        String location=created.headers().firstValue("location").orElseThrow();
+        long id=Long.parseLong(location.substring(location.indexOf("id=")+3));
+        assertEquals(List.of(id),historyIds(get(client,"/order-history?status=NEW").body()));
+        long stock=fixture.scalar("SELECT quantity FROM dbo.books WHERE bookid=?",book());
+        String previous="NEW";
+        for(var status:OrderStatus_24133049.values()) {
+            fixture.execute("UPDATE dbo.orders SET order_status=? WHERE order_id=?",status.getCode(),id);
+            String history=get(client,"/order-history?status="+status.getCode()).body();
+            assertEquals(List.of(id),historyIds(history)); assertTrue(history.contains(status.getLabel()));
+            if(!previous.equals(status.getCode())) assertTrue(historyIds(get(client,"/order-history?status="+previous).body()).isEmpty());
+            String detail=get(client,"/order?id="+id).body(); assertTrue(detail.contains(status.getLabel())); assertTrue(detail.contains("UNPAID"));
+            assertEquals(stock,fixture.scalar("SELECT quantity FROM dbo.books WHERE bookid=?",book()));
+            assertEquals(1235,fixture.scalar("SELECT total_amount*100 FROM dbo.orders WHERE order_id=?",id));
+            previous=status.getCode();
+        }
+        for(String alias:List.of("PENDING","SHIPPING","DELIVERED")) {
+            fixture.execute("UPDATE dbo.orders SET order_status=? WHERE order_id=?",alias,id);
+            var status=OrderStatus_24133049.fromCode(alias);
+            String result=get(client,"/order-history?status="+status.getCode()).body();
+            assertEquals(List.of(id),historyIds(result)); assertTrue(result.contains(status.getLabel()));
+        }
+        fixture.execute("UPDATE dbo.orders SET order_status='NEW' WHERE order_id=?",id);
+    }
+    @Test void historyDeniesGuestAdminAndInactiveAccounts() throws Exception {
+        assertEquals(302,get(client,"/order-history").statusCode());
+        login(client,2); assertEquals(403,get(client,"/order-history").statusCode());
+        login(client,0); fixture.execute("UPDATE dbo.users SET is_active=0 WHERE id=?",fixture.userIds.get(0));
+        assertEquals(403,get(client,"/order-history").statusCode());
+        assertEquals(403,get(client,"/order?id=1").statusCode());
     }
     @Test void cartAddsAccumulatesUpdatesRemovesAndClearsWithServerValidation() throws Exception {
         login(client,0); String csrf=csrf(client);

@@ -83,6 +83,7 @@
                     </li>
                     <c:if test="${sessionScope.currentUser != null && sessionScope.currentUser.active && not sessionScope.currentUser.admin}">
                         <li class="nav-item"><a class="nav-link" href="${pageContext.request.contextPath}/cart">Giỏ hàng <span class="badge bg-success">${cartQuantity}</span></a></li>
+                        <li class="nav-item"><a class="nav-link" href="${pageContext.request.contextPath}/order-history">Lịch sử đặt hàng</a></li>
                     </c:if>
                     <!-- Trang quản trị: Chỉ hiển thị cho Admin -->
                     <c:if test="${sessionScope.currentUser != null && sessionScope.currentUser.admin}">

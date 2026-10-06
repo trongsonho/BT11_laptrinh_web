@@ -91,11 +91,44 @@ public class OrderDao_24133049 {
                         while (dr.next()) items.add(new OrderItem_24133049(dr.getInt(1), dr.getString(2), dr.getBigDecimal(3), dr.getInt(4), dr.getBigDecimal(5)));
                     }
                 }
-                return new Order_24133049(id, rs.getString("order_code"),
-                    new Shipping_24133049(rs.getString("recipient_name"), rs.getString("phone"), rs.getString("shipping_address"), rs.getString("note")),
-                    rs.getTimestamp("created_at"), rs.getBigDecimal("total_amount"), rs.getString("payment_method"),
-                    rs.getString("order_status"), rs.getString("payment_status"), items);
+                return mapOrder(rs, items);
             }
         }
+    }
+
+    public long countOwnedOrders(int userId, OrderStatus_24133049 status) throws SQLException {
+        String sql = "SELECT COUNT_BIG(*) FROM dbo.orders WHERE user_id=?" + statusClause(status);
+        try (Connection c = connections.open(); PreparedStatement ps = c.prepareStatement(sql)) {
+            bindOwnerAndStatus(ps, userId, status);
+            try (ResultSet rs = ps.executeQuery()) { rs.next(); return rs.getLong(1); }
+        }
+    }
+    public List<Order_24133049> findOwnedOrders(int userId, OrderStatus_24133049 status, long offset, int pageSize) throws SQLException {
+        if (offset < 0 || pageSize < 1 || pageSize > 100) throw new IllegalArgumentException("Invalid pagination");
+        String sql = "SELECT * FROM dbo.orders WHERE user_id=?" + statusClause(status)
+            + " ORDER BY created_at DESC,order_id DESC OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
+        try (Connection c = connections.open(); PreparedStatement ps = c.prepareStatement(sql)) {
+            int next = bindOwnerAndStatus(ps, userId, status);
+            ps.setLong(next++, offset); ps.setInt(next, pageSize);
+            List<Order_24133049> result = new ArrayList<>();
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) result.add(mapOrder(rs, List.of()));
+            }
+            return result;
+        }
+    }
+    private String statusClause(OrderStatus_24133049 status) {
+        return status == null ? "" : " AND order_status IN (" + String.join(",", Collections.nCopies(status.getDatabaseCodes().size(), "?")) + ")";
+    }
+    private int bindOwnerAndStatus(PreparedStatement ps, int userId, OrderStatus_24133049 status) throws SQLException {
+        ps.setInt(1, userId); int next = 2;
+        if (status != null) for (String code : status.getDatabaseCodes()) ps.setString(next++, code);
+        return next;
+    }
+    private Order_24133049 mapOrder(ResultSet rs, List<OrderItem_24133049> items) throws SQLException {
+        return new Order_24133049(rs.getLong("order_id"), rs.getString("order_code"),
+            new Shipping_24133049(rs.getString("recipient_name"), rs.getString("phone"), rs.getString("shipping_address"), rs.getString("note")),
+            rs.getTimestamp("created_at"), rs.getBigDecimal("total_amount"), rs.getString("payment_method"),
+            rs.getString("order_status"), rs.getString("payment_status"), items);
     }
 }

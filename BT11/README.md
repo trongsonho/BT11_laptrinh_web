@@ -32,6 +32,7 @@ cd D:\BT11_laptrinh_web\BT11
 
 # Chỉ bổ sung schema đơn hàng vào database hiện có.
 sqlcmd -S .\SQLEXPRESS -E -C -d BookStore_24133049 -b -i database/migrations/BT11_cart_cod.sql
+sqlcmd -S .\SQLEXPRESS -E -C -d BookStore_24133049 -b -i database/migrations/BT11_order_status_history.sql
 
 # Build và chạy các test logic mặc định.
 Remove-Item Env:RUN_SQLSERVER_TESTS -ErrorAction SilentlyContinue
@@ -61,7 +62,7 @@ Các tài khoản trên thuộc dữ liệu mẫu gốc; sử dụng nếu chún
 
 Script chỉ dừng Tomcat kiểm thử của project này, kể cả bản cũ từng chạy trong `target/tomcat-test`. Runtime hiện lưu tại `.runtime/tomcat-test`, tách khỏi `target` để Maven clean không xóa các file log đang mở.
 
-> **Không chạy lại `database.sql` trên database đang dùng.** Script gốc có lệnh DROP bảng. Chỉ chạy `database/migrations/BT11_cart_cod.sql` để bổ sung chức năng COD; migration có thể chạy lại mà không xóa dữ liệu.
+> **Không chạy lại `database.sql` trên database đang dùng.** Script gốc có lệnh DROP bảng. Chỉ chạy các migration bổ sung COD và lịch sử ở phần hướng dẫn; cả hai có thể chạy lại mà không xóa dữ liệu.
 
 ## 2. Công nghệ và cấu hình
 
@@ -162,6 +163,7 @@ Các URL dưới đây được nối với context `/GK_laptrinh_web_24133049`.
 | Checkout COD | GET `/checkout`; POST `/checkout` để xác nhận |
 | Đặt hàng thành công | `/order-success?id={orderId}` |
 | Chi tiết đơn | `/order?id={orderId}` |
+| Lịch sử và lọc trạng thái | GET `/order-history?status=DELIVERING&page=1` |
 | Quản lý sách Admin | `/admin/books` |
 | Thêm / sửa / xóa sách Admin | `/admin/books/add`, `/admin/books/edit?id={bookId}`, `/admin/books/delete` |
 
@@ -209,7 +211,7 @@ Remove-Item Env:RUN_HTTP_TESTS -ErrorAction SilentlyContinue
 mvn test
 ```
 
-Kết quả mong đợi: **7 test logic PASS; 10 test tích hợp SKIPPED**. SKIPPED không có nghĩa là phần tích hợp đã được kiểm chứng trong lượt chạy này.
+Kết quả mong đợi: **10 test logic PASS; 16 test tích hợp SKIPPED**. SKIPPED không có nghĩa là phần tích hợp đã được kiểm chứng trong lượt chạy này.
 
 ### Test đầy đủ với SQL Server và Tomcat
 
@@ -221,14 +223,16 @@ $env:RUN_HTTP_TESTS = 'true'
 mvn test '-DargLine=-Djava.library.path=D:\apache-tomcat-11.0.25-windows-x64\apache-tomcat-11.0.25\bin --enable-native-access=ALL-UNNAMED'
 ```
 
-Kết quả mong đợi: **17 test, 0 failures, 0 errors, 0 skipped**.
+Kết quả mong đợi: **26 test, 0 failures, 0 errors, 0 skipped**.
 
 | Bộ test | Số test | Phạm vi |
 |---|---:|---|
 | `CartServiceTest_24133049` | 4 | Số lượng, cộng dồn, tồn kho, tính tiền và xóa giỏ |
 | `OrderServiceTest_24133049` | 3 | Giao hàng, token checkout, giữ giỏ khi lỗi và retry |
 | `OrderTransactionTest_24133049` | 6 | Lưu COD, snapshot, quyền sở hữu, cạnh tranh tồn kho, chống trùng và rollback |
-| `CommerceHttpTest_24133049` | 4 | Luồng HTTP, quyền, CSRF, form, UTF-8, COD và hồi quy chức năng cũ |
+| `CommerceHttpTest_24133049` | 7 | Luồng HTTP, quyền, CSRF, UTF-8, COD, lịch sử và lọc/phân trang |
+| `OrderHistoryServiceTest_24133049` | 3 | Mapping/allowlist, trang sai/tràn số, giới hạn trang |
+| `OrderHistoryDatabaseTest_24133049` | 3 | COUNT theo chủ đơn, tám trạng thái, alias, snapshot và cập nhật SQL |
 
 Để chạy riêng, thêm `-Dtest=OrderTransactionTest_24133049` hoặc `-Dtest=CommerceHttpTest_24133049` vào lệnh. Khi dùng Tomcat khác, HTTP test nhận URL qua `-Dtest.baseUrl=http://localhost:8080/GK_laptrinh_web_24133049`.
 
@@ -278,7 +282,48 @@ target/          WAR và báo cáo build/test được sinh tự động
 .runtime/        Tomcat kiểm thử được sinh tự động
 ```
 
-## 9. Git và hạn nộp
+## 9. Lịch sử đặt hàng và lọc trạng thái
+
+Chạy migration bổ sung trên database hiện có (sau migration COD):
+
+```powershell
+sqlcmd -S .\SQLEXPRESS -E -C -d BookStore_24133049 -b -i database/migrations/BT11_order_status_history.sql
+```
+
+Migration chỉ mở rộng CHECK `CK_orders_status_24133049` và thêm index. Các CHECK tiền, COD và thanh toán vẫn được giữ; không đổi trạng thái đơn hiện có, không tạo lại database. Có thể chạy lại. Không chạy `database.sql` gốc.
+
+Đăng nhập User đang hoạt động → **Lịch sử đặt hàng** trên thanh điều hướng, hoặc mở `/order-history` dưới context WAR. Danh sách chỉ hiển thị đơn của tài khoản hiện tại, mới nhất trước theo `created_at DESC, order_id DESC`, 10 đơn/trang. Bộ lọc dùng GET; đổi trạng thái về trang 1, chuyển trang giữ bộ lọc. Trang chi tiết vẫn dùng `/order?id=...` và chỉ chủ đơn xem được.
+
+| Mã chính trong bộ lọc/demo | Nhãn | Mã tương đương được đọc và lọc chung |
+|---|---|---|
+| `NEW` | Đơn hàng mới | `PENDING` |
+| `CONFIRMED` | Đã xác nhận | — |
+| `PREPARING` | Chuẩn bị hàng | — |
+| `SHIPPED` | Vận chuyển | `SHIPPING` |
+| `DELIVERING` | Đang giao hàng | — |
+| `COMPLETED` | Đã giao | `DELIVERED` |
+| `CANCELLED` | Đơn hàng hủy | — |
+| `RETURNED` | Đơn hàng hoàn | — |
+
+Giữ mã `SHIPPED` và `COMPLETED` đã có trong schema; không UPDATE hàng loạt để đổi mã. Mapping tập trung trong `OrderStatus_24133049`, dùng chung cho lịch sử, bộ lọc và chi tiết. `SHIPPED/SHIPPING` khác `DELIVERING`. Trạng thái không nhận diện hiển thị “Trạng thái chưa xác định”. Thanh toán `UNPAID/PAID` là trường riêng, không phải bộ lọc trạng thái đơn. COD mới vẫn `NEW/UNPAID`.
+
+### Demo đổi trạng thái bằng SQL Server
+
+1. Chọn một đơn dành cho demo, ghi lại `order_id` và **order_status ban đầu**.
+2. Mở `database/demo/BT11_order_status_demo.sql` trong SSMS, chọn database `BookStore_24133049`.
+3. Mỗi đoạn UPDATE được bọc trong `/* ... */`. Sao chép **một đoạn** sang cửa sổ query mới, bỏ dấu bọc chú thích và thay `@OrderId = NULL` bằng ID đã chọn.
+4. Chạy đoạn đó: SELECT hiển thị trạng thái trước, UPDATE đúng một ID và kiểm tra số dòng, SELECT hiển thị kết quả sau. Refresh lịch sử và chi tiết; đơn rời bộ lọc cũ và xuất hiện trong bộ lọc mới.
+5. Lặp lại với trạng thái khác khi cần. Để khôi phục, dùng một đoạn tương tự và thay mã đích bằng trạng thái ban đầu đã ghi lại.
+
+Chạy toàn file demo không thực hiện các UPDATE vì tất cả đều đang được chú thích. Không tự chạy liên tiếp tám đoạn. Schema hiện không có `updated_at`, nên script chỉ sửa `order_status`.
+
+**Giới hạn nghiệp vụ:** đổi trạng thái bằng SQL trong bài này chỉ minh họa hiển thị/lọc. Nó không triển khai hủy đơn, hoàn hàng, hoàn tiền, trừ/hoàn tồn kho hoặc xác nhận đã thu tiền; đổi sang `CANCELLED`, `RETURNED`, `COMPLETED/DELIVERED` không thay đổi tiền, kho hay trạng thái thanh toán. User không có nút tự cập nhật trạng thái và không bổ sung UI Admin trong phạm vi này.
+
+Kiểm thử mới gồm mapping/allowlist và trang sai/tràn số; COUNT và truy vấn đều giới hạn User; phân trang ổn định; đủ tám bộ lọc và mã cũ; SQL refresh; quyền Guest/Admin/inactive; COD mới xuất hiện trong lịch sử; snapshot và thanh toán/tồn kho giữ nguyên. Test chỉ đổi các đơn fixture, khôi phục/dọn theo ID, không sửa đơn thật.
+
+Kết quả lượt build bản lịch sử ngày 06/10/2026 lúc 21:46:58: **26/26 test PASS, không skip**, trên SQL Server và Tomcat hiện có. Xem [biên bản lịch sử](tests/ORDER_HISTORY_TEST_RESULTS.md).
+
+## 10. Git và hạn nộp
 
 Hạn commit giỏ hàng và COD: **trước 10:45 ngày 05/10/2026, Asia/Ho_Chi_Minh**.
 
@@ -288,3 +333,5 @@ Source đã được lọc để nộp tại [BT11 trên GitHub](https://github.
 2. `feat(user): implement COD checkout with atomic order persistence`
 
 Chỉ stage source, migration, test và tài liệu liên quan. `target/` và `.runtime/` đã được ignore. Không commit mật khẩu cấu hình hoặc DOCX/PDF/ZIP giữa kỳ không thuộc thay đổi này; không sửa thời gian commit. File `mail.properties` chứa cấu hình riêng được loại khỏi bản nộp; dùng biến môi trường SMTP hoặc tạo file cục bộ từ bản example khi cần.
+
+Chức năng lịch sử được commit local với thông điệp `feat(user): add order history with status filters` trên main trong repository local tại `.runtime/github-structure`. Không push thay đổi lịch sử lên GitHub theo yêu cầu.

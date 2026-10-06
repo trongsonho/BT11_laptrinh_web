@@ -24,6 +24,8 @@ public class Order_24133049 {
     public BigDecimal getTotal() { return total; }
     public String getPaymentMethod() { return paymentMethod; }
     public String getStatus() { return status; }
+    public String getStatusLabel() { return OrderStatus_24133049.labelFor(status); }
+    public String getStatusBadge() { return OrderStatus_24133049.badgeFor(status); }
     public String getPaymentStatus() { return paymentStatus; }
     public List<OrderItem_24133049> getItems() { return items; }
 }

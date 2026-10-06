@@ -13,6 +13,7 @@ public class OrderController_24133049 extends HttpServlet {
     private final OrderService_24133049 service = new OrderService_24133049();
     @Override protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         synchronized (req.getSession()) {
+            resp.setHeader("Cache-Control", "no-store");
             try {
                 var user = CommerceRequest_24133049.requireUser(req, resp); if (user == null) return;
                 long id;
