@@ -30,4 +30,4 @@ Chưa kiểm tra trực quan bằng trình duyệt đồ họa hoặc runtime đ
 
 ## Git
 
-Chỉ commit local trên branch main của repository trong `.runtime/github-structure`. Thông điệp: `feat(user): add order history with status filters`. Không push. Source gốc ngoài repository cũng đã được cập nhật để ứng dụng đang chạy dùng cùng implementation; chỉ file thuộc lịch sử được đồng bộ và stage.
+Đã kiểm thử và commit trên branch main của repository trong `.runtime/github-structure`. Thông điệp: `feat(user): add order history with status filters`. Việc push được thực hiện khi có yêu cầu của chủ project. Source gốc ngoài repository cũng đã được cập nhật để ứng dụng đang chạy dùng cùng implementation; chỉ file thuộc lịch sử được đồng bộ và stage.

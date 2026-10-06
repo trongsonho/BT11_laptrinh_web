@@ -334,4 +334,18 @@ Source đã được lọc để nộp tại [BT11 trên GitHub](https://github.
 
 Chỉ stage source, migration, test và tài liệu liên quan. `target/` và `.runtime/` đã được ignore. Không commit mật khẩu cấu hình hoặc DOCX/PDF/ZIP giữa kỳ không thuộc thay đổi này; không sửa thời gian commit. File `mail.properties` chứa cấu hình riêng được loại khỏi bản nộp; dùng biến môi trường SMTP hoặc tạo file cục bộ từ bản example khi cần.
 
-Chức năng lịch sử được commit local với thông điệp `feat(user): add order history with status filters` trên main trong repository local tại `.runtime/github-structure`. Không push thay đổi lịch sử lên GitHub theo yêu cầu.
+Chức năng lịch sử được commit local với thông điệp `feat(user): add order history with status filters` trên main trong repository local tại `.runtime/github-structure`. Các thay đổi được đưa lên GitHub khi có yêu cầu push của chủ project.
+
+### Đơn mẫu để kiểm tra trực tiếp trên web
+
+Script `database/demo/BT11_order_history_seed.sql` thêm 16 đơn riêng cho `user1@gmail.com`, 2 đơn cho mỗi trạng thái. Mã bắt đầu bằng `DEMO-HISTORY-`; ghi chú xác định rõ đây là dữ liệu hiển thị mẫu, không phải giao dịch mua bán. Script chạy lại không tạo trùng, không đổi đơn thật và không trừ tồn kho. Ngay cả đơn mẫu đã giao cũng giữ UNPAID để không giả lập thu tiền.
+
+```powershell
+sqlcmd -S .\SQLEXPRESS -E -C -d BookStore_24133049 -b -i database/demo/BT11_order_history_seed.sql
+```
+
+Đăng nhập User mẫu, mở Lịch sử đặt hàng, thử Tất cả/từng bộ lọc, phân trang và xem chi tiết. Khi không cần dữ liệu demo, chạy script cleanup (chỉ xóa đúng 16 mã demo của tài khoản đã chọn và marker ghi chú):
+
+```powershell
+sqlcmd -S .\SQLEXPRESS -E -C -d BookStore_24133049 -b -i database/demo/BT11_order_history_cleanup.sql
+```
