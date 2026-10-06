@@ -1,0 +1,8 @@
+# Cấu hình SMTP Gmail gửi OTP
+# Đổi tên file này thành mail.properties hoặc copy nội dung sang mail.properties và điền thông tin thật của bạn.
+# Lưu ý: Với Gmail, mật khẩu phải là 'Mật khẩu ứng dụng' (App Password 16 ký tự), KHÔNG dùng mật khẩu đăng nhập tài khoản thông thường.
+mail.host=smtp.gmail.com
+mail.port=587
+mail.username=your_email@gmail.com
+mail.password=your_16_char_app_password
+mail.from=your_email@gmail.com
